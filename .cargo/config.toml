@@ -1,0 +1,30 @@
+# Platform-specific optimizations applied automatically based on target triple
+
+# Build settings
+[build]
+rustc-wrapper = "sccache"
+# Incremental builds are disabled when using sccache for better cache efficiency
+incremental = false
+
+# x86_64 Linux optimizations
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+# ARM64 Linux optimizations
+[target.aarch64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+# x86_64 macOS
+[target.x86_64-apple-darwin]
+# macOS typically handles library paths automatically
+
+# ARM64 macOS (Apple Silicon)
+[target.aarch64-apple-darwin]
+# macOS typically handles library paths automatically
+
+# Windows x86_64
+[target.x86_64-pc-windows-msvc]
+# Windows typically uses vcpkg or system libraries
+
+
+

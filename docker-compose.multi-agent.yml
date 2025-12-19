@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  # Shared Locai server for "shared reality"
+  locai-shared:
+    image: locai-server:latest
+    container_name: research-locai
+    ports:
+      - "3000:3000"
+    volumes:
+      - research-shared-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Researcher Agent 1
+  researcher-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: researcher-1
+    environment:
+      - AGENT_ID=researcher_1
+      - AGENT_ROLE=researcher
+      - SHARED_LOCAI_URL=http://locai-shared:3000
+      - RUST_LOG=info,thymos=debug
+    volumes:
+      - researcher-1-private:/data/private
+    depends_on:
+      locai-shared:
+        condition: service_healthy
+    command: ["cargo", "run", "--example", "multi_agent"]
+
+  # Researcher Agent 2
+  researcher-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: researcher-2
+    environment:
+      - AGENT_ID=researcher_2
+      - AGENT_ROLE=researcher
+      - SHARED_LOCAI_URL=http://locai-shared:3000
+      - RUST_LOG=info,thymos=debug
+    volumes:
+      - researcher-2-private:/data/private
+    depends_on:
+      locai-shared:
+        condition: service_healthy
+    command: ["cargo", "run", "--example", "multi_agent"]
+
+  # Analyzer Agent
+  analyzer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: analyzer
+    environment:
+      - AGENT_ID=analyzer
+      - AGENT_ROLE=analyzer
+      - SHARED_LOCAI_URL=http://locai-shared:3000
+      - RUST_LOG=info,thymos=debug
+    volumes:
+      - analyzer-private:/data/private
+    depends_on:
+      locai-shared:
+        condition: service_healthy
+      researcher-1:
+        condition: service_started
+      researcher-2:
+        condition: service_started
+    command: ["cargo", "run", "--example", "multi_agent"]
+
+volumes:
+  research-shared-data:
+  researcher-1-private:
+  researcher-2-private:
+  analyzer-private:
+
+

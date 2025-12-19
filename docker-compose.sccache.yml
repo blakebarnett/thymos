@@ -1,0 +1,67 @@
+# Docker Compose for Thymos with host sccache support
+# 
+# This configuration leverages the host's sccache cache for faster Docker builds
+# 
+# Usage:
+#   DOCKER_BUILDKIT=1 docker-compose -f docker-compose.sccache.yml build
+#   docker-compose -f docker-compose.sccache.yml up
+
+version: '3.8'
+
+services:
+  # Shared Locai server for "shared reality"
+  locai-shared:
+    image: locai-server:latest
+    container_name: thymos-locai-shared
+    ports:
+      - "3000:3000"
+    volumes:
+      - locai-shared-data:/data
+    environment:
+      - RUST_LOG=info,locai=debug
+      - LOCAI_HOST=0.0.0.0
+      - LOCAI_PORT=3000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+
+  # Example agent with hybrid memory (private + shared)
+  agent-example:
+    build:
+      context: .
+      dockerfile: Dockerfile.sccache
+      # Enable BuildKit for cache mount support
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    image: thymos-agent:latest
+    container_name: thymos-agent-example
+    volumes:
+      # Private embedded memory storage
+      - agent-example-data:/data/private
+    environment:
+      - AGENT_ID=example_agent
+      - MEMORY_MODE=embedded
+      - RUST_LOG=info,thymos=debug
+      # For hybrid mode:
+      # - MEMORY_MODE=hybrid
+      # - SHARED_LOCAI_URL=http://locai-shared:3000
+    depends_on:
+      - locai-shared
+    restart: unless-stopped
+
+volumes:
+  locai-shared-data:
+    driver: local
+  agent-example-data:
+    driver: local
+
+networks:
+  default:
+    name: thymos-network
+
+
+

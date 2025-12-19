@@ -1,0 +1,153 @@
+# Multi-stage Dockerfile for Thymos with sccache support
+# Optimized for size and build speed using host sccache cache
+#
+# Build with: DOCKER_BUILDKIT=1 docker build -f Dockerfile.sccache -t thymos-agent:latest .
+#
+# Note: Uses Rust nightly because Thymos requires edition 2024
+
+# ============================================================================
+# Stage 1: Build dependencies and cache them
+# ============================================================================
+FROM rustlang/rust:nightly-bookworm AS chef
+
+# Install cargo-chef and sccache for caching
+RUN cargo install cargo-chef --locked && \
+    cargo install sccache --locked
+
+WORKDIR /app
+
+# ============================================================================
+# Stage 2: Prepare the dependency recipe
+# ============================================================================
+FROM chef AS planner
+
+# Copy all source files to prepare the build plan
+COPY . .
+
+# Analyze dependencies to create a recipe for caching
+RUN cargo chef prepare --recipe-path recipe.json
+
+# ============================================================================
+# Stage 3: Build dependencies (cached layer) with sccache
+# ============================================================================
+FROM chef AS dependencies
+
+# Install build dependencies for native libraries (RocksDB, etc.)
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libclang-dev \
+    clang \
+    cmake \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the dependency recipe and cargo config
+COPY --from=planner /app/recipe.json recipe.json
+COPY .cargo/config.toml .cargo/config.toml
+
+# Configure sccache
+ENV RUSTC_WRAPPER=sccache
+ENV SCCACHE_DIR=/sccache
+ENV SCCACHE_CACHE_SIZE="10G"
+
+# Build dependencies with sccache
+# Using BuildKit cache mount to persist sccache across builds
+RUN --mount=type=cache,target=/sccache \
+    --mount=type=cache,target=/usr/local/cargo/registry \
+    cargo chef cook --release --recipe-path recipe.json && \
+    sccache --show-stats
+
+# ============================================================================
+# Stage 4: Build the application with sccache
+# ============================================================================
+FROM chef AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libclang-dev \
+    clang \
+    cmake \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy cached dependencies from previous stage
+COPY --from=dependencies /app/target target
+COPY --from=dependencies /usr/local/cargo /usr/local/cargo
+
+# Copy source code and cargo config
+COPY . .
+
+# Configure sccache
+ENV RUSTC_WRAPPER=sccache
+ENV SCCACHE_DIR=/sccache
+ENV SCCACHE_CACHE_SIZE="10G"
+
+# Build the application with sccache
+# Using BuildKit cache mount to share cache with host
+RUN --mount=type=cache,target=/sccache \
+    --mount=type=cache,target=/usr/local/cargo/registry \
+    cargo build --release --bin thymos && \
+    echo "=== sccache statistics ===" && \
+    sccache --show-stats
+
+# Verify the binary exists and is executable
+RUN ls -lh /app/target/release/thymos && \
+    file /app/target/release/thymos && \
+    /app/target/release/thymos --help
+
+# ============================================================================
+# Stage 5: Runtime image (final, minimal)
+# ============================================================================
+FROM debian:bookworm-slim AS runtime
+
+# Install runtime dependencies
+# - ca-certificates: for HTTPS/TLS
+# - libssl3: OpenSSL runtime
+# - bash: useful shell for debugging
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    bash \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create a non-root user for security
+RUN groupadd -r thymos && useradd -r -g thymos -u 1000 thymos
+
+# Create data directory with proper permissions
+RUN mkdir -p /data && chown -R thymos:thymos /data
+
+# Copy the compiled binary from builder
+COPY --from=builder /app/target/release/thymos /usr/local/bin/thymos
+
+# Verify binary is executable
+RUN chmod +x /usr/local/bin/thymos
+
+# Switch to non-root user
+USER thymos
+
+# Set working directory
+WORKDIR /data
+
+# Health check (placeholder - will need actual health endpoint)
+# HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+#     CMD thymos agent status || exit 1
+
+# Default command
+CMD ["thymos", "--help"]
+
+# ============================================================================
+# Metadata
+# ============================================================================
+LABEL org.opencontainers.image.title="Thymos Agent"
+LABEL org.opencontainers.image.description="Intelligent agent framework with memory and lifecycle management (sccache optimized)"
+LABEL org.opencontainers.image.version="0.1.0"
+LABEL org.opencontainers.image.source="https://github.com/blakebarnett/thymos"
+LABEL org.opencontainers.image.licenses="MIT OR Apache-2.0"
+
+
+

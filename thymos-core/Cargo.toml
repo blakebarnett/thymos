@@ -1,0 +1,138 @@
+[package]
+name = "thymos-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Core agent framework with memory, lifecycle, and coordination"
+homepage = "https://github.com/blakebarnett/thymos"
+documentation = "https://docs.rs/thymos-core"
+keywords = ["agent", "ai", "memory", "lifecycle", "coordination"]
+categories = ["data-structures", "asynchronous"]
+readme = "../README.md"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+figment = { workspace = true }
+sha2 = "0.10"
+
+# Locai for memory management
+locai = { workspace = true, features = ["surrealdb-embedded"] }
+
+# SurrealDB for event streams and agent state
+surrealdb = { workspace = true, features = ["kv-mem", "kv-rocksdb"], default-features = false }
+
+# Additional dependencies
+futures = "0.3"
+serde_yaml = "0.9"
+tokio-util = "0.7"
+tokio-stream = { version = "0.1", features = ["io-util"] }
+dirs = "6.0.0"
+humantime-serde = "1.1.1"
+regex = "1.10"
+once_cell = "1.20"
+reqwest = { version = "0.11", features = ["json", "stream"] }
+backoff = { version = "0.4", features = ["tokio"] }
+urlencoding = "2.1"
+
+# AutoAgents for agent integration and pub/sub
+autoagents-core = { path = "../../AutoAgents/crates/autoagents-core" }
+autoagents-llm = { path = "../../AutoAgents/crates/autoagents-llm" }
+
+# Browser automation (for research lab example)  
+playwright = { version = "0.0.20", optional = true }
+
+# Optional dependencies
+fastembed = { version = "5.2", optional = true }
+
+[build-dependencies]
+which = "6.0.3"
+
+[dev-dependencies]
+tempfile = "3.10.0"
+tokio = { workspace = true, features = ["test-util"] }
+tokio-test = "0.4.3"
+
+[features]
+default = []
+
+# Optional features
+server-mode = []  # Connect to Locai server instead of embedded
+
+# Distributed pub/sub support (SurrealDB live queries)
+pubsub-distributed = ["surrealdb/protocol-ws", "surrealdb/protocol-http"]
+
+# Python bindings: disable jemalloc to avoid TLS issues in Python extensions
+python-bindings = []
+
+# Go bindings: similar to Python, avoids jemalloc TLS issues
+go-bindings = []
+
+# Embedding providers
+embeddings-local = ["dep:fastembed"]
+
+# LLM providers (no heavy deps needed, using reqwest)
+llm-groq = []
+llm-ollama = []
+llm-openai = []
+llm-anthropic = []
+
+# Browser automation for research lab
+browser-playwright = ["dep:playwright"]
+
+[[example]]
+name = "simple_agent"
+path = "examples/simple_agent.rs"
+
+[[example]]
+name = "memory_lifecycle"
+path = "examples/memory_lifecycle.rs"
+
+[[example]]
+name = "concept_extraction"
+path = "examples/concept_extraction.rs"
+
+[[example]]
+name = "alias_resolution"
+path = "examples/alias_resolution.rs"
+
+[[example]]
+name = "concept_promotion"
+path = "examples/concept_promotion.rs"
+
+[[example]]
+name = "consolidation"
+path = "examples/consolidation.rs"
+
+[[example]]
+name = "server_mode"
+path = "examples/server_mode.rs"
+
+[[example]]
+name = "hybrid_mode"
+path = "examples/hybrid_mode.rs"
+
+[[example]]
+name = "batteries_included"
+path = "examples/batteries_included.rs"
+
+[[example]]
+name = "research_lab"
+path = "examples/research_lab/main.rs"
+required-features = ["llm-ollama", "browser-playwright"]
+
+[[example]]
+name = "test_server_backend"
+path = "examples/test_server_backend.rs"
+

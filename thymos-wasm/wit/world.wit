@@ -1,0 +1,185 @@
+/// Thymos Agent Framework - WASI Component Model Interface
+/// 
+/// This WIT definition describes the Thymos agent API for use with
+/// the WebAssembly Component Model. It enables polyglot bindings
+/// for any language with a WASM runtime.
+
+package thymos:agent@0.1.0;
+
+/// Core types used throughout the API
+interface types {
+    /// Unique identifier for a memory
+    type memory-id = string;
+    
+    /// Unique identifier for an agent
+    type agent-id = string;
+    
+    /// Agent operational status
+    enum agent-status {
+        /// Agent is actively running and responding
+        active,
+        /// Agent is running but passive (listening only)
+        listening,
+        /// Agent is stopped, state saved
+        dormant,
+        /// Agent is archived (long-term storage)
+        archived,
+    }
+    
+    /// Memory type hints for categorization
+    enum memory-type {
+        /// General episodic memory (default)
+        episodic,
+        /// Durable fact/knowledge
+        fact,
+        /// Dialogue/conversation context
+        conversation,
+    }
+    
+    /// A stored memory
+    record memory {
+        /// Unique identifier
+        id: memory-id,
+        /// The memory content
+        content: string,
+        /// Properties as JSON string
+        properties-json: string,
+        /// ISO 8601 timestamp when created
+        created-at: string,
+        /// ISO 8601 timestamp when last accessed (optional)
+        last-accessed: option<string>,
+    }
+    
+    /// Agent state snapshot
+    record agent-state {
+        /// Current operational status
+        status: agent-status,
+        /// ISO 8601 timestamp when started (optional)
+        started-at: option<string>,
+        /// ISO 8601 timestamp of last activity
+        last-active: string,
+        /// Custom properties as JSON string
+        properties-json: string,
+    }
+    
+    /// Options for storing memories
+    record remember-options {
+        /// Memory type hint
+        memory-type: option<memory-type>,
+        /// Tags to associate (JSON array)
+        tags-json: option<string>,
+        /// Priority level (higher = more important)
+        priority: option<s32>,
+    }
+    
+    /// Search options
+    record search-options {
+        /// Maximum number of results
+        limit: option<u32>,
+    }
+    
+    /// Error types
+    variant thymos-error {
+        /// Configuration error
+        configuration(string),
+        /// Memory operation error
+        memory(string),
+        /// Agent operation error  
+        agent(string),
+        /// Invalid input
+        invalid-input(string),
+        /// Operation not supported
+        not-supported(string),
+    }
+}
+
+/// Agent lifecycle and management
+interface agent {
+    use types.{agent-id, agent-status, agent-state, thymos-error};
+    
+    /// Create a new agent with the given ID
+    create: func(id: agent-id) -> result<_, thymos-error>;
+    
+    /// Get the current agent ID
+    id: func() -> result<agent-id, thymos-error>;
+    
+    /// Get the agent description
+    description: func() -> result<string, thymos-error>;
+    
+    /// Get current agent status
+    status: func() -> result<agent-status, thymos-error>;
+    
+    /// Set agent status
+    set-status: func(status: agent-status) -> result<_, thymos-error>;
+    
+    /// Get full agent state
+    state: func() -> result<agent-state, thymos-error>;
+}
+
+/// Memory storage and retrieval
+interface memory {
+    use types.{memory-id, memory, memory-type, remember-options, search-options, thymos-error};
+    
+    /// Store a memory and return its ID
+    remember: func(content: string) -> result<memory-id, thymos-error>;
+    
+    /// Store a memory with type hint
+    remember-typed: func(content: string, memory-type: memory-type) -> result<memory-id, thymos-error>;
+    
+    /// Store a memory with full options
+    remember-with-options: func(content: string, options: remember-options) -> result<memory-id, thymos-error>;
+    
+    /// Search memories by query
+    search: func(query: string, options: option<search-options>) -> result<list<memory>, thymos-error>;
+    
+    /// Get a specific memory by ID
+    get: func(id: memory-id) -> result<option<memory>, thymos-error>;
+    
+    /// Delete a memory by ID
+    delete: func(id: memory-id) -> result<bool, thymos-error>;
+    
+    /// Get total memory count
+    count: func() -> result<u64, thymos-error>;
+}
+
+/// Persistence and storage operations
+interface storage {
+    use types.{thymos-error};
+    
+    /// Connect to a Locai server for full semantic search support
+    /// This switches the backend from in-memory to server mode
+    connect: func(server-url: string, api-key: option<string>) -> result<_, thymos-error>;
+    
+    /// Disconnect from server and switch to in-memory mode
+    disconnect: func() -> result<_, thymos-error>;
+    
+    /// Check if connected to a server
+    is-connected: func() -> bool;
+    
+    /// Save all memories to a file (in-memory mode only)
+    /// The path is relative to the WASI preopened directory
+    save: func(path: string) -> result<u64, thymos-error>;
+    
+    /// Load memories from a file (switches to in-memory mode)
+    /// Returns the number of memories loaded
+    load: func(path: string) -> result<u64, thymos-error>;
+    
+    /// Check if a storage file exists
+    exists: func(path: string) -> result<bool, thymos-error>;
+    
+    /// Clear all memories (in-memory only)
+    clear: func() -> result<_, thymos-error>;
+}
+
+/// The main Thymos world that composes all interfaces
+world thymos {
+    /// Export the agent interface
+    export agent;
+    
+    /// Export the memory interface
+    export memory;
+    
+    /// Export the storage interface
+    export storage;
+}
+

@@ -1,0 +1,12 @@
+{
+  "name": "thymos-wasm-examples",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Test examples for Thymos WASM component",
+  "scripts": {
+    "test:inmemory": "node test_inmemory.mjs",
+    "test:server": "node test_server.mjs",
+    "setup": "./run_test.sh"
+  }
+}

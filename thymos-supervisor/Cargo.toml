@@ -1,0 +1,44 @@
+[package]
+name = "thymos-supervisor"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Optional process supervisor for production multi-agent deployments with cost and resource optimization"
+homepage = "https://github.com/blakebarnett/thymos"
+documentation = "https://docs.rs/thymos-supervisor"
+keywords = ["agent", "supervisor", "process", "orchestration", "lifecycle"]
+categories = ["asynchronous", "development-tools"]
+readme = "README.md"
+
+[dependencies]
+thymos-core = { path = "../thymos-core" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+
+# Process management
+tempfile = "3.10.0"
+
+# Multi-tenant SaaS example showing cost optimization
+[[example]]
+name = "multi_tenant"
+path = "examples/multi_tenant.rs"
+
+# Cost optimization example for expensive LLM agents
+[[example]]
+name = "cost_optimization"
+path = "examples/cost_optimization.rs"
+
+# Versioning supervisor example demonstrating automatic branching and rollback
+[[example]]
+name = "versioning_supervisor"
+path = "examples/versioning_supervisor.rs"
+

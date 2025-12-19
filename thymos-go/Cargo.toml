@@ -1,0 +1,29 @@
+[package]
+name = "thymos-go"
+version.workspace = true
+edition = "2024"
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Go bindings for Thymos agent framework"
+homepage = "https://github.com/blakebarnett/thymos"
+keywords = ["agent", "ai", "memory", "go", "bindings", "ffi"]
+categories = ["api-bindings", "asynchronous"]
+
+[lib]
+name = "thymos_go"
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+thymos-core = { path = "../thymos-core", default-features = false, features = ["go-bindings"] }
+locai = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+once_cell = "1.20"
+
+# Enable disable_initial_exec_tls to fix TLS allocation issues in CGO
+# This allows jemalloc to be dynamically loaded after program startup
+tikv-jemalloc-sys = { version = "0.6", features = ["disable_initial_exec_tls"] }
+

@@ -1,0 +1,62 @@
+[workspace]
+members = [
+    "thymos-core",
+    "thymos-cli",
+    "thymos-python",
+    "thymos-go",
+    "thymos-wasm",
+    "thymos-supervisor",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["Thymos Contributors"]
+repository = "https://github.com/blakebarnett/thymos"
+license = "MIT OR Apache-2.0"
+rust-version = "1.90.0"
+
+[workspace.dependencies]
+tokio = { version = "1.41.1", features = ["full", "rt-multi-thread"] }
+serde = { version = "1.0.197", features = ["derive"] }
+serde_json = "1.0.114"
+thiserror = "2.0.12"
+anyhow = "1.0.85"
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+async-trait = "0.1.77"
+chrono = { version = "0.4.39", features = ["serde"] }
+uuid = { version = "1.7.0", features = ["v4", "serde"] }
+
+# Locai dependency
+# For local development, override via .cargo/config.toml using [patch] section
+# For CI/Docker builds, this will use the git dependency
+locai = { git = "https://github.com/blakebarnett/locai.git", default-features = false }
+
+# AutoAgents for pub/sub runtime (local path for development)
+# Note: Added directly to thymos-core Cargo.toml as optional dependency
+
+# Configuration
+figment = { version = "0.10.12", features = ["env", "toml", "yaml", "json"] }
+
+# SurrealDB for event streams and agent state
+# Note: protocol-ws and protocol-http are needed for locai's remote storage support
+# For Python bindings, we'll override this to use kv-mem instead of kv-rocksdb
+surrealdb = { version = "2.3.10", default-features = false, features = ["protocol-ws", "protocol-http"] }
+
+# Release profile matching Locai
+[profile.release]
+lto = true
+strip = true
+opt-level = 3
+panic = 'abort'
+codegen-units = 1
+
+# Patch jemalloc to fix TLS allocation issues in Python/Go bindings
+# The disable_initial_exec_tls feature allows jemalloc to be dynamically loaded after program startup
+# This fixes: "cannot allocate memory in static TLS block" errors in CGO/Python extensions
+#
+# Note: [patch.crates-io] cannot add features, only replace the source.
+# We need to enable the feature through the dependency chain instead.
+

@@ -1,0 +1,55 @@
+[package]
+name = "thymos-wasm"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "WebAssembly bindings for Thymos agent framework using WASI Component Model"
+homepage = "https://github.com/blakebarnett/thymos"
+keywords = ["agent", "ai", "memory", "wasm", "wasi", "component-model"]
+categories = ["wasm", "api-bindings"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# WIT bindgen for Component Model
+wit-bindgen = "0.36"
+
+# Async runtime for WASM (subset of tokio)
+tokio = { version = "1", default-features = false, features = ["sync", "macros"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Time handling (WASM-compatible)
+chrono = { workspace = true }
+
+# UUID generation
+uuid = { workspace = true }
+
+# WASI and HTTP support
+wasi = "0.14"
+urlencoding = "2.1"
+
+# For now, we'll implement a simplified in-memory store
+# SurrealDB doesn't easily compile to WASM, so we use a lightweight alternative
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
+
+[build-dependencies]
+
+[features]
+default = []
+
+[package.metadata.component]
+package = "thymos:agent"
+
+[package.metadata.component.target]
+path = "wit"
+
+[package.metadata.component.dependencies]
+

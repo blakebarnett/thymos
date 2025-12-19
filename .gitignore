@@ -1,0 +1,48 @@
+# Rust
+target/
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# IDE
+.vscode/
+.cursor/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Data directories
+data/
+*.db
+*.rocksdb/
+.fastembed_cache/
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local
+
+# Docker
+.dockerignore
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Reference documentation (internal notes, not published)
+reference-docs/
+tasks/
+
+# OS
+Thumbs.db
+
+# Vendor directories
+vendor/
+node_modules/
+
