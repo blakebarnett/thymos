@@ -2,7 +2,7 @@
 
 use crate::agent::Agent;
 use crate::error::{Result, ThymosError};
-use locai::storage::models::MemorySnapshot;
+use locai::storage::models::{MemorySnapshot, RestoreMode};
 
 /// Result of checkout operation
 #[derive(Debug, Clone)]
@@ -133,6 +133,38 @@ impl super::repository::MemoryRepository {
         // The core functionality (branch switching, commit tracking) is tested separately.
         // TODO: Implement proper cross-instance snapshot restore
         
+        Ok(())
+    }
+
+    /// Checkout a commit by restoring the repository's own Locai instance
+    ///
+    /// This is a simpler checkout that restores the repository's memory state
+    /// without requiring an agent instance. Useful for context manager rollback.
+    ///
+    /// # Arguments
+    /// * `commit_hash` - Commit hash to checkout
+    ///
+    /// # Returns
+    /// Result indicating success or failure
+    pub async fn checkout(&self, commit_hash: &str) -> Result<()> {
+        // Get commit
+        let commit = self
+            .get_commit(commit_hash)
+            .await?
+            .ok_or_else(|| ThymosError::AgentNotFound(format!("Commit '{}' not found", commit_hash)))?;
+
+        // Get snapshot
+        let snapshot = self
+            .get_snapshot(&commit.snapshot_id)
+            .await?
+            .ok_or_else(|| ThymosError::Memory(format!("Snapshot '{}' not found", commit.snapshot_id)))?;
+
+        // Restore to repository's Locai instance
+        self.locai()
+            .restore_snapshot(&snapshot, RestoreMode::Overwrite)
+            .await
+            .map_err(|e| ThymosError::Memory(format!("Failed to restore snapshot: {}", e)))?;
+
         Ok(())
     }
 }

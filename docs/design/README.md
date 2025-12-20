@@ -14,6 +14,14 @@ Architectural design documents for the Thymos agent framework.
 | Document | Description |
 |----------|-------------|
 | [GIT_STYLE_MEMORY_VERSIONING.md](GIT_STYLE_MEMORY_VERSIONING.md) | Git-like operations (branches, commits, worktrees) |
+| [NAMED_MEMORY_SCOPES.md](NAMED_MEMORY_SCOPES.md) | Named scopes with configurable decay and search weights |
+
+## Context & Session
+
+| Document | Description |
+|----------|-------------|
+| [CONTEXT_MANAGER.md](CONTEXT_MANAGER.md) | High-level context management with grounding and rollback |
+| [SUBAGENT_API.md](SUBAGENT_API.md) | Ergonomic subagent spawning with worktree isolation |
 
 ## Agent Coordination
 

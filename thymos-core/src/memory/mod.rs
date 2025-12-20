@@ -17,7 +17,7 @@ pub use backend::{MemoryBackend, MemoryRecord, QueryOptions, StoreOptions};
 pub use hybrid::HybridMemorySystem;
 pub use inmemory::InMemoryBackend;
 pub use routing::RoutingStrategy;
-pub use scope::{MemoryScope, SearchScope};
+pub use scope::{MemoryScope, MemoryScopeConfig, ScopedMemory, ScopeRegistry, SearchScope};
 pub use server::{ServerMemoryBackend, ServerMemoryConfig};
 
 /// Options for storing memories with additional metadata
@@ -116,7 +116,7 @@ pub enum SearchStrategy {
     Auto,
 }
 
-/// Memory system with lifecycle management
+/// Memory system with lifecycle management and named scopes
 pub enum MemorySystem {
     /// Embedded backend (local Locai instance)
     Single {
@@ -124,6 +124,8 @@ pub enum MemorySystem {
         locai: Arc<Locai>,
         /// Lifecycle manager for memory decay
         lifecycle: MemoryLifecycle,
+        /// Named scope registry
+        scope_registry: ScopeRegistry,
     },
     /// Server backend (remote Locai server via HTTP)
     Server {
@@ -131,11 +133,15 @@ pub enum MemorySystem {
         backend: Arc<ServerMemoryBackend>,
         /// Lifecycle manager for memory decay
         lifecycle: MemoryLifecycle,
+        /// Named scope registry
+        scope_registry: ScopeRegistry,
     },
     /// Hybrid backend (private + shared)
     Hybrid {
         /// Hybrid memory system
         hybrid: Arc<HybridMemorySystem>,
+        /// Named scope registry
+        scope_registry: ScopeRegistry,
     },
 }
 
@@ -159,6 +165,7 @@ impl MemorySystem {
                 Ok(Self::Single {
                     locai: Arc::new(locai),
                     lifecycle,
+                    scope_registry: ScopeRegistry::new(),
                 })
             }
             crate::config::MemoryMode::Server { url, api_key } => {
@@ -180,6 +187,7 @@ impl MemorySystem {
                 Ok(Self::Server {
                     backend: Arc::new(backend),
                     lifecycle,
+                    scope_registry: ScopeRegistry::new(),
                 })
             }
             crate::config::MemoryMode::Hybrid {
@@ -197,6 +205,7 @@ impl MemorySystem {
 
                 Ok(Self::Hybrid {
                     hybrid: Arc::new(hybrid),
+                    scope_registry: ScopeRegistry::new(),
                 })
             }
         }
@@ -215,7 +224,7 @@ impl MemorySystem {
             Self::Server { backend, .. } => {
                 backend.store(content, None).await
             }
-            Self::Hybrid { hybrid } => {
+            Self::Hybrid { hybrid, .. } => {
                 hybrid.remember_private(content).await
             }
         }
@@ -241,7 +250,7 @@ impl MemorySystem {
                 };
                 backend.store(content, Some(options)).await
             }
-            Self::Hybrid { hybrid } => {
+            Self::Hybrid { hybrid, .. } => {
                 hybrid.remember_shared(content).await
             }
         }
@@ -267,7 +276,7 @@ impl MemorySystem {
                 };
                 backend.store(content, Some(options)).await
             }
-            Self::Hybrid { hybrid } => {
+            Self::Hybrid { hybrid, .. } => {
                 hybrid.remember_private(content).await
             }
         }
@@ -352,7 +361,7 @@ impl MemorySystem {
                 };
                 backend.store(content, Some(store_options)).await
             }
-            Self::Hybrid { hybrid } => {
+            Self::Hybrid { hybrid, .. } => {
                 match options.memory_type {
                     Some(MemoryTypeHint::Fact) => {
                         hybrid
@@ -375,7 +384,7 @@ impl MemorySystem {
             Self::Single { .. } | Self::Server { .. } => Err(ThymosError::Configuration(
                 "remember_private only available in hybrid mode".to_string(),
             )),
-            Self::Hybrid { hybrid } => hybrid.remember_private(content).await,
+            Self::Hybrid { hybrid, .. } => hybrid.remember_private(content).await,
         }
     }
 
@@ -385,7 +394,7 @@ impl MemorySystem {
             Self::Single { .. } | Self::Server { .. } => Err(ThymosError::Configuration(
                 "remember_shared only available in hybrid mode".to_string(),
             )),
-            Self::Hybrid { hybrid } => hybrid.remember_shared(content).await,
+            Self::Hybrid { hybrid, .. } => hybrid.remember_shared(content).await,
         }
     }
 
@@ -424,7 +433,7 @@ impl MemorySystem {
                 // The server generates embeddings automatically
                 backend.store(content, None).await
             }
-            Self::Hybrid { hybrid } => {
+            Self::Hybrid { hybrid, .. } => {
                 hybrid
                     .remember_private_with_embedding(content, embedding)
                     .await
@@ -442,7 +451,7 @@ impl MemorySystem {
             Self::Single { .. } | Self::Server { .. } => Err(ThymosError::Configuration(
                 "remember_private_with_embedding only available in hybrid mode".to_string(),
             )),
-            Self::Hybrid { hybrid } => {
+            Self::Hybrid { hybrid, .. } => {
                 hybrid
                     .remember_private_with_embedding(content, embedding)
                     .await
@@ -460,7 +469,7 @@ impl MemorySystem {
             Self::Single { .. } | Self::Server { .. } => Err(ThymosError::Configuration(
                 "remember_shared_with_embedding only available in hybrid mode".to_string(),
             )),
-            Self::Hybrid { hybrid } => {
+            Self::Hybrid { hybrid, .. } => {
                 hybrid
                     .remember_shared_with_embedding(content, embedding)
                     .await
@@ -488,7 +497,7 @@ impl MemorySystem {
                 let records = backend.search(query, Some(options)).await?;
                 Ok(records.into_iter().map(|r| r.into()).collect())
             }
-            Self::Hybrid { hybrid } => {
+            Self::Hybrid { hybrid, .. } => {
                 hybrid.search(query, SearchScope::Both, limit).await
             }
         }
@@ -505,7 +514,7 @@ impl MemorySystem {
             Self::Single { .. } | Self::Server { .. } => {
                 self.search(query, limit).await
             }
-            Self::Hybrid { hybrid } => hybrid.search(query, scope, limit).await,
+            Self::Hybrid { hybrid, .. } => hybrid.search(query, scope, limit).await,
         }
     }
 
@@ -568,7 +577,7 @@ impl MemorySystem {
                 let records = backend.search(query, Some(query_options)).await?;
                 Ok(records.into_iter().map(|r| r.into()).collect())
             }
-            Self::Hybrid { hybrid } => {
+            Self::Hybrid { hybrid, .. } => {
                 hybrid
                     .search_with_options(query, SearchScope::Both, limit, options)
                     .await
@@ -591,7 +600,7 @@ impl MemorySystem {
                 let record = backend.get(id).await?;
                 Ok(record.map(|r| r.into()))
             }
-            Self::Hybrid { hybrid } => hybrid.get_memory(id).await,
+            Self::Hybrid { hybrid, .. } => hybrid.get_memory(id).await,
         }
     }
 
@@ -601,7 +610,7 @@ impl MemorySystem {
             Self::Single { lifecycle, .. } | Self::Server { lifecycle, .. } => {
                 lifecycle.calculate_strength(memory)
             }
-            Self::Hybrid { hybrid } => hybrid.calculate_strength(memory),
+            Self::Hybrid { hybrid, .. } => hybrid.calculate_strength(memory),
         }
     }
 
@@ -626,6 +635,185 @@ impl MemorySystem {
     /// Check if this is a server-backed memory system
     pub fn is_server(&self) -> bool {
         matches!(self, Self::Server { .. })
+    }
+
+    /// Get the scope registry
+    pub fn scope_registry(&self) -> &ScopeRegistry {
+        match self {
+            Self::Single { scope_registry, .. } => scope_registry,
+            Self::Server { scope_registry, .. } => scope_registry,
+            Self::Hybrid { scope_registry, .. } => scope_registry,
+        }
+    }
+
+    /// Define a named scope with configuration
+    pub async fn define_scope(&self, config: MemoryScopeConfig) -> Result<()> {
+        self.scope_registry().define_scope(config).await
+    }
+
+    /// Get scope configuration by name
+    pub async fn get_scope(&self, name: &str) -> Option<MemoryScopeConfig> {
+        self.scope_registry().get_scope(name).await
+    }
+
+    /// List all defined scopes
+    pub async fn list_scopes(&self) -> Vec<MemoryScopeConfig> {
+        self.scope_registry().list_scopes().await
+    }
+
+    /// Store a memory in a specific named scope
+    ///
+    /// The scope must be defined first via `define_scope()`.
+    /// The default scope is always available.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// memory.define_scope(MemoryScopeConfig::new("personal")
+    ///     .with_decay_hours(336.0)).await?;
+    ///
+    /// memory.remember_in_scope("personal", "Important decision made", None).await?;
+    /// ```
+    pub async fn remember_in_scope(
+        &self,
+        scope: &str,
+        content: &str,
+        options: Option<RememberOptions>,
+    ) -> Result<String> {
+        // Verify scope exists
+        let scope_config = self.get_scope(scope).await.ok_or_else(|| {
+            ThymosError::Configuration(format!("Scope '{}' not defined", scope))
+        })?;
+
+        // Build options with scope tag
+        let mut opts = options.unwrap_or_default();
+        opts.tags.push(scope_config.scope_tag());
+
+        self.remember_with_options(content.to_string(), opts).await
+    }
+
+    /// Search within a specific named scope
+    ///
+    /// Only returns memories tagged with the specified scope.
+    pub async fn search_in_scope(
+        &self,
+        scope: &str,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<Memory>> {
+        // Verify scope exists
+        let scope_config = self.get_scope(scope).await.ok_or_else(|| {
+            ThymosError::Configuration(format!("Scope '{}' not defined", scope))
+        })?;
+
+        // Search and filter by scope tag
+        let all_results = self.search(query, Some(limit * 2)).await?;
+        let scope_tag = scope_config.scope_tag();
+
+        let filtered: Vec<Memory> = all_results
+            .into_iter()
+            .filter(|m| m.tags.contains(&scope_tag))
+            .take(limit)
+            .collect();
+
+        Ok(filtered)
+    }
+
+    /// Search across multiple named scopes with weighted score merging
+    ///
+    /// Results are ranked by (relevance_score * scope.search_weight).
+    pub async fn search_scopes(
+        &self,
+        scopes: &[&str],
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<ScopedMemory>> {
+        let mut all_results: Vec<ScopedMemory> = Vec::new();
+
+        for scope_name in scopes {
+            let scope_config = match self.get_scope(scope_name).await {
+                Some(config) => config,
+                None => continue, // Skip undefined scopes
+            };
+
+            let scope_tag = scope_config.scope_tag();
+            let search_weight = scope_config.search_weight;
+
+            // Search and filter
+            let results = self.search(query, Some(limit)).await?;
+
+            for memory in results {
+                let has_scope = memory.tags.contains(&scope_tag);
+
+                if has_scope {
+                    // Use a heuristic score based on position (first = highest relevance)
+                    // In practice, this would use the actual search score from Locai
+                    let score = 1.0; // Placeholder - Locai doesn't expose relevance score directly
+
+                    all_results.push(ScopedMemory::new(
+                        memory,
+                        score,
+                        scope_name.to_string(),
+                        search_weight,
+                    ));
+                }
+            }
+        }
+
+        // Sort by weighted score (descending) and take top `limit`
+        all_results.sort_by(|a, b| {
+            b.weighted_score
+                .partial_cmp(&a.weighted_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        all_results.truncate(limit);
+
+        Ok(all_results)
+    }
+
+    /// Search all defined scopes with weighted score merging
+    pub async fn search_all_scopes(&self, query: &str, limit: usize) -> Result<Vec<ScopedMemory>> {
+        let scopes = self.list_scopes().await;
+        let scope_names: Vec<&str> = scopes.iter().map(|s| s.name.as_str()).collect();
+        self.search_scopes(&scope_names, query, limit).await
+    }
+
+    /// Calculate memory strength with scope-aware decay
+    ///
+    /// If the memory belongs to a named scope, uses that scope's decay configuration.
+    /// Otherwise, uses the default scope configuration.
+    pub async fn calculate_strength_with_scope(&self, memory: &Memory) -> f64 {
+        // Extract scope from memory tags
+        let scope_name = ScopeRegistry::extract_scope_from_tags(&memory.tags)
+            .unwrap_or_else(|| "default".to_string());
+
+        // Get scope config (use default if not found)
+        let scope_config = self
+            .get_scope(&scope_name)
+            .await
+            .unwrap_or_else(MemoryScopeConfig::default);
+
+        // Calculate strength using scope-specific parameters
+        self.calculate_strength_with_config(memory, &scope_config)
+    }
+
+    /// Calculate memory strength using specific scope configuration
+    fn calculate_strength_with_config(
+        &self,
+        memory: &Memory,
+        scope_config: &MemoryScopeConfig,
+    ) -> f64 {
+        let now = chrono::Utc::now();
+        let last_accessed = memory.last_accessed.unwrap_or(memory.created_at);
+        let hours_since_access = now.signed_duration_since(last_accessed).num_hours() as f64;
+
+        // Use scope-specific decay rate and importance multiplier
+        let stability = scope_config.decay_hours * scope_config.importance_multiplier;
+
+        // Forgetting curve: R = e^(-t/S)
+        let strength = (-hours_since_access / stability).exp();
+
+        strength.clamp(0.0, 1.0)
     }
 }
 
@@ -777,5 +965,135 @@ mod tests {
         if !results.is_empty() {
             assert!(results[0].content.contains("blue"));
         }
+    }
+
+    #[tokio::test]
+    async fn test_scope_registry_in_memory_system() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+
+        let config = MemoryConfig {
+            mode: crate::config::MemoryMode::Embedded {
+                data_dir: temp_dir.path().to_path_buf(),
+            },
+            ..Default::default()
+        };
+
+        let memory_system = MemorySystem::new(config)
+            .await
+            .expect("Failed to create memory system");
+
+        // Default scope should exist
+        let default = memory_system.get_scope("default").await;
+        assert!(default.is_some());
+
+        // Define a new scope
+        memory_system
+            .define_scope(
+                MemoryScopeConfig::new("personal")
+                    .with_decay_hours(336.0)
+                    .with_importance_multiplier(1.5),
+            )
+            .await
+            .expect("Failed to define scope");
+
+        let personal = memory_system.get_scope("personal").await;
+        assert!(personal.is_some());
+        assert_eq!(personal.as_ref().unwrap().decay_hours, 336.0);
+        assert_eq!(personal.as_ref().unwrap().importance_multiplier, 1.5);
+    }
+
+    #[tokio::test]
+    async fn test_remember_in_scope() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+
+        let config = MemoryConfig {
+            mode: crate::config::MemoryMode::Embedded {
+                data_dir: temp_dir.path().to_path_buf(),
+            },
+            ..Default::default()
+        };
+
+        let memory_system = MemorySystem::new(config)
+            .await
+            .expect("Failed to create memory system");
+
+        // Define scope
+        memory_system
+            .define_scope(MemoryScopeConfig::new("observations"))
+            .await
+            .expect("Failed to define scope");
+
+        // Store in scope
+        let memory_id = memory_system
+            .remember_in_scope("observations", "Saw a new PR in #engineering", None)
+            .await
+            .expect("Failed to store in scope");
+
+        assert!(!memory_id.is_empty());
+
+        // Verify memory has scope tag
+        let memory = memory_system
+            .get_memory(&memory_id)
+            .await
+            .expect("Failed to get memory")
+            .expect("Memory not found");
+
+        assert!(memory.tags.iter().any(|t| t == "_scope:observations"));
+    }
+
+    #[tokio::test]
+    async fn test_remember_in_undefined_scope_fails() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+
+        let config = MemoryConfig {
+            mode: crate::config::MemoryMode::Embedded {
+                data_dir: temp_dir.path().to_path_buf(),
+            },
+            ..Default::default()
+        };
+
+        let memory_system = MemorySystem::new(config)
+            .await
+            .expect("Failed to create memory system");
+
+        // Try to store in undefined scope
+        let result = memory_system
+            .remember_in_scope("nonexistent", "Some content", None)
+            .await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_list_scopes() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+
+        let config = MemoryConfig {
+            mode: crate::config::MemoryMode::Embedded {
+                data_dir: temp_dir.path().to_path_buf(),
+            },
+            ..Default::default()
+        };
+
+        let memory_system = MemorySystem::new(config)
+            .await
+            .expect("Failed to create memory system");
+
+        // Initially just default
+        let scopes = memory_system.list_scopes().await;
+        assert_eq!(scopes.len(), 1);
+
+        // Add more scopes
+        memory_system
+            .define_scope(MemoryScopeConfig::new("personal"))
+            .await
+            .unwrap();
+        memory_system
+            .define_scope(MemoryScopeConfig::new("team"))
+            .await
+            .unwrap();
+
+        let scopes = memory_system.list_scopes().await;
+        assert_eq!(scopes.len(), 3);
     }
 }

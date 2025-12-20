@@ -1,159 +1,63 @@
-# Thymos
+# TLA - Technical Lead Assistance
 
-**Domain-agnostic agent framework with semantic memory, versioning, and multi-agent coordination.**
+Tools and documents for organizing Blue Team work within the CSO (Compute, Storage & Observability) division.
 
-Thymos provides lifecycle management, memory versioning, and workflow orchestration for AI agents. Built in Rust as a companion to [Locai](https://github.com/blakebarnett/locai).
+## Philosophy
 
-## Table of Contents
+> **Effort alignment, not task tracking.**
 
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Features](#features)
-- [Architecture](#architecture)
-- [Documentation](#documentation)
-- [Development](#development)
-- [License](#license)
+This repository contains tools to provide visibility into how Blue Team's work aligns with CSO 2026 initiatives, without imposing burdensome task-level tracking on an autonomous, self-motivated team.
 
-## Installation
+## Contents
 
-```toml
-[dependencies]
-thymos-core = { version = "0.1.0", features = ["llm-groq", "embeddings-local"] }
-```
-
-**Feature flags:**
-- `llm-groq` / `llm-openai` / `llm-anthropic` - LLM providers
-- `embeddings-local` - Local embeddings (no API needed)
-- `pubsub-distributed` - Distributed messaging with SurrealDB
+- [`docs/`](docs/) - Team guides and alignment documents
+- [`scripts/`](scripts/) - CLI tools for status reporting
+- [`templates/`](templates/) - Templates for updates, etc.
 
 ## Quick Start
 
-```rust
-use thymos_core::prelude::*;
+```bash
+# Add bin/ to your PATH (or symlink tla to somewhere in PATH)
+export PATH="$PATH:$(pwd)/bin"
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let agent = Agent::builder()
-        .id("my_agent")
-        .build()
-        .await?;
-    
-    agent.remember("Alice met Bob in Paris").await?;
-    let memories = agent.search_memories("Alice").await?;
-    
-    Ok(())
-}
+# Remember context from conversations
+tla remember "Sean mentioned DCIM is blocked on vendor"
+
+# Log decisions
+tla decide "Using Cilium for DNS" --context "Evaluated CoreDNS"
+
+# Prep for a 1:1
+tla prep sean
+
+# Search your memories
+tla recall "what did we decide about DNS"
 ```
-
-See [examples/](thymos-core/examples/) for more complete examples.
-
-## Features
-
-### Core
-
-| Feature | Description |
-|---------|-------------|
-| **Agent Framework** | Lifecycle management, relevance evaluation, event hooks |
-| **Semantic Memory** | BM25 + vector search via Locai, temporal decay |
-| **Memory Versioning** | Git-style branches, commits, worktrees for agent memory |
-| **Concept Extraction** | Entity tracking, aliases, promotion pipelines |
-
-### Workflows
-
-| Pattern | Description |
-|---------|-------------|
-| **Chain** | Sequential steps with gates and data flow |
-| **Router** | Classification-based routing to handlers |
-| **Parallel** | Concurrent execution with aggregation |
-| **Orchestrator** | Task decomposition and delegation |
-| **Evaluator-Optimizer** | Iterative refinement loops |
-
-### Advanced Patterns
-
-| Pattern | Description |
-|---------|-------------|
-| **Speculative Execution** | Try multiple approaches, commit best result |
-| **Parallel Isolation** | Worktree-based memory isolation |
-| **Consensus Merge** | Multi-agent voting and LLM-assisted synthesis |
-| **Bisect Regression** | Binary search debugging through memory history |
-
-### Infrastructure
-
-| Component | Description |
-|-----------|-------------|
-| **LLM Providers** | Groq, OpenAI, Anthropic, Ollama |
-| **MCP Server** | Model Context Protocol with tools, resources, prompts |
-| **Pub/Sub** | Local, distributed (SurrealDB), and hybrid modes |
-| **Tracing** | Execution traces, cost estimation, OpenTelemetry export |
-
-## Architecture
-
-```
-thymos/
-├── thymos-core/        # Core framework
-├── thymos-supervisor/  # Production process management (optional)
-├── thymos-cli/         # Command-line tools
-├── thymos-go/          # Go bindings
-├── thymos-python/      # Python bindings
-├── thymos-wasm/        # WebAssembly bindings
-└── docs/               # Documentation
-```
-
-### Memory Modes
-
-- **Embedded** - Local storage (default)
-- **Server** - Remote Locai server
-- **Hybrid** - Private embedded + shared server
-
-### Comparison to Locai
-
-| | Locai | Thymos |
-|---|-------|--------|
-| Purpose | Memory storage | Agent lifecycle |
-| Focus | Search, embeddings | Versioning, coordination |
-| Usage | Library/service | Framework (uses Locai) |
-
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [Getting Started](docs/GETTING_STARTED.md) | Setup and first agent |
-| [Agent Framework](docs/design/AGENT_FRAMEWORK_DESIGN.md) | Core architecture |
-| [Memory Versioning](docs/design/GIT_STYLE_MEMORY_VERSIONING.md) | Git-style operations |
-| [LLM-Native Design](docs/design/LLM_NATIVE_AGENT_DESIGN.md) | Workflow patterns |
-| [Pub/Sub System](docs/design/PUBSUB_ABSTRACTION_DESIGN.md) | Agent coordination |
-
-See [docs/design/README.md](docs/design/README.md) for complete documentation index.
-
-## Development
 
 ### Prerequisites
 
-- Rust 1.90.0+
-- Docker (optional)
+- [Locai CLI](https://github.com/your-org/locai) installed and in PATH
+- Optionally: `LINEAR_API_KEY` for Linear integration
 
-### Commands
+## CSO 2026 Initiatives
 
-```bash
-make build      # Build all crates
-make test       # Run tests
-make check      # Lint and format
-```
+The Blue Team contributes primarily to these sub-initiatives:
 
-### Examples
+| Sub-Initiative | Target | Blue Team Focus |
+|----------------|--------|-----------------|
+| Operational Excellence | Q1 2026 | Platform stability, automation |
+| DC Bring-ups | Q1 2026 | Provisioning, DCIM |
+| Improve Security Posture | Q1 2026 | TPM/SecureBoot, hardening |
+| Reduction of Human Operations | Q1 2026 | Automation, self-healing |
+| Platform Stability | Q1 2026 | SLOs, observability |
+| V2 Enablement | Q1 2026 | V2 infrastructure support |
 
-```bash
-cargo run --example batteries_included --all-features
-cargo run --example simple_agent
-cargo run --example memory_lifecycle
-```
+## Team
 
-## License
+| Member | Primary Domains |
+|--------|-----------------|
+| Blake Barnett | Provisioning stack, Anodizer, FM |
+| AJ Christensen | SRE generalist, security, automation |
+| Michael Lang | Groq Node Controller, systems |
+| Sean Cribbs | DCIM, SLO/SLI, observability |
+| Clement Liaw (Jan 2025) | GPU deployments, DCIM |
 
-MIT or Apache-2.0 (dual license)
-
-## Acknowledgments
-
-- [Locai](https://github.com/blakebarnett/locai) - Semantic memory
-- [SurrealDB](https://surrealdb.com/) - Distributed pub/sub
-- [Tokio](https://tokio.rs/) - Async runtime

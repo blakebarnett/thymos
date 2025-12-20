@@ -532,6 +532,210 @@ impl Agent {
             .build()
             .map_err(|e| ThymosError::Configuration(e.to_string()))
     }
+
+    /// Create a context manager for this agent.
+    ///
+    /// The context manager provides integrated session management, memory grounding,
+    /// automatic summarization, and quality monitoring.
+    ///
+    /// # Arguments
+    ///
+    /// * `session_id` - Unique identifier for the conversation session
+    /// * `config` - Context manager configuration
+    ///
+    /// # Returns
+    ///
+    /// A new ContextManager that shares this agent's memory system.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no LLM provider is configured on the agent.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let mut ctx = agent.context_manager("session-1", ContextConfig::default())?;
+    ///
+    /// let result = ctx.process_turn("Hello!").await?;
+    /// ctx.add_response("Hi there!");
+    /// ```
+    pub fn context_manager(
+        &self,
+        session_id: impl Into<String>,
+        config: crate::context::ContextConfig,
+    ) -> Result<crate::context::ContextManager> {
+        let llm = self
+            .llm_provider
+            .clone()
+            .ok_or_else(|| ThymosError::Configuration("LLM provider required for context manager".to_string()))?;
+
+        Ok(crate::context::ContextManager::new(
+            session_id,
+            Arc::clone(&self.memory),
+            llm,
+            config,
+        ))
+    }
+
+    /// Create a context manager with a system prompt.
+    ///
+    /// # Arguments
+    ///
+    /// * `session_id` - Unique identifier for the conversation session
+    /// * `system_prompt` - System prompt for the conversation
+    /// * `config` - Context manager configuration
+    ///
+    /// # Returns
+    ///
+    /// A new ContextManager with the specified system prompt.
+    pub fn context_manager_with_prompt(
+        &self,
+        session_id: impl Into<String>,
+        system_prompt: impl Into<String>,
+        config: crate::context::ContextConfig,
+    ) -> Result<crate::context::ContextManager> {
+        let llm = self
+            .llm_provider
+            .clone()
+            .ok_or_else(|| ThymosError::Configuration("LLM provider required for context manager".to_string()))?;
+
+        Ok(crate::context::ContextManager::with_system_prompt(
+            session_id,
+            system_prompt,
+            Arc::clone(&self.memory),
+            llm,
+            config,
+        ))
+    }
+
+    /// Create a context manager with versioning support (enables rollback).
+    ///
+    /// # Arguments
+    ///
+    /// * `session_id` - Unique identifier for the conversation session
+    /// * `repo` - Memory repository for version control
+    /// * `config` - Context manager configuration
+    ///
+    /// # Returns
+    ///
+    /// A new ContextManager with versioning enabled.
+    pub fn context_manager_with_versioning(
+        &self,
+        session_id: impl Into<String>,
+        repo: Arc<crate::memory::versioning::MemoryRepository>,
+        config: crate::context::ContextConfig,
+    ) -> Result<crate::context::ContextManager> {
+        let llm = self
+            .llm_provider
+            .clone()
+            .ok_or_else(|| ThymosError::Configuration("LLM provider required for context manager".to_string()))?;
+
+        Ok(crate::context::ContextManager::with_versioning(
+            session_id,
+            Arc::clone(&self.memory),
+            repo,
+            llm,
+            config,
+        ))
+    }
+
+    /// Spawn a subagent with isolated memory.
+    ///
+    /// Creates a new agent instance with a worktree-backed memory system,
+    /// enabling isolated execution that can be merged back to the parent
+    /// or discarded without affecting the parent's state.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Subagent configuration
+    /// * `worktree_manager` - Worktree manager for memory isolation
+    ///
+    /// # Returns
+    ///
+    /// A Subagent handle for executing tasks and managing the lifecycle.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let manager = MemoryWorktreeManager::new(repo);
+    ///
+    /// let researcher = agent.spawn_subagent(
+    ///     SubagentConfig::new("researcher")
+    ///         .with_purpose("Research and report findings"),
+    ///     Arc::new(manager),
+    /// ).await?;
+    ///
+    /// let result = researcher.execute("Research Rust async", llm).await?;
+    /// researcher.merge_all(&agent).await?;
+    /// ```
+    pub async fn spawn_subagent(
+        &self,
+        config: crate::memory::versioning::SubagentConfig,
+        worktree_manager: Arc<crate::memory::versioning::MemoryWorktreeManager>,
+    ) -> Result<crate::memory::versioning::Subagent> {
+        // Build memory config for the worktree
+        // For now, we'll use embedded mode in a temp directory
+        let temp_worktree_dir = std::env::temp_dir().join(format!(
+            "thymos_subagent_{}_{}", 
+            self.id, 
+            config.name
+        ));
+
+        let memory_config = MemoryConfig {
+            mode: crate::config::MemoryMode::Embedded {
+                data_dir: temp_worktree_dir,
+            },
+            ..Default::default()
+        };
+
+        // Create worktree with isolated memory
+        let worktree_id = worktree_manager
+            .create_worktree(
+                "main",
+                Some(&config.name),
+                &format!("{}-{}", self.id, config.name),
+                memory_config,
+            )
+            .await?;
+
+        // Get the isolated agent
+        let agent = worktree_manager.get_worktree_agent(&worktree_id).await?;
+
+        // Create subagent handle
+        crate::memory::versioning::Subagent::new(
+            config,
+            worktree_id,
+            agent,
+            worktree_manager,
+            self.id.clone(),
+        )
+        .await
+    }
+
+    /// Spawn multiple subagents for parallel work.
+    ///
+    /// # Arguments
+    ///
+    /// * `configs` - Vector of subagent configurations
+    /// * `worktree_manager` - Shared worktree manager
+    ///
+    /// # Returns
+    ///
+    /// Vector of Subagent handles
+    pub async fn spawn_subagents(
+        &self,
+        configs: Vec<crate::memory::versioning::SubagentConfig>,
+        worktree_manager: Arc<crate::memory::versioning::MemoryWorktreeManager>,
+    ) -> Result<Vec<crate::memory::versioning::Subagent>> {
+        let mut subagents = Vec::with_capacity(configs.len());
+        for config in configs {
+            subagents.push(
+                self.spawn_subagent(config, Arc::clone(&worktree_manager))
+                    .await?,
+            );
+        }
+        Ok(subagents)
+    }
 }
 
 /// Builder for Agent

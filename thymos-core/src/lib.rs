@@ -50,6 +50,7 @@ pub mod agent;
 pub mod concepts;
 pub mod config;
 pub mod consolidation;
+pub mod context;
 pub mod conversation;
 pub mod embeddings;
 pub mod error;
@@ -103,6 +104,11 @@ pub mod prelude {
     pub use crate::memory::{
         HybridMemorySystem, MemoryLifecycle, MemoryScope, MemorySystem, MemoryTypeHint,
         RememberOptions, RoutingStrategy, SearchOptions, SearchScope, SearchStrategy,
+    };
+
+    pub use crate::memory::versioning::{
+        MemoryBranch, MemoryCommit, MemoryRepository, MemoryWorktree, MemoryWorktreeManager,
+        Subagent, SubagentConfig, SubagentMergeResult, SubagentResult,
     };
     pub use crate::metrics::{
         AgentMetrics, LLMCostCalculator, MetricsCollector, MetricsStorage,
@@ -161,6 +167,11 @@ pub mod prelude {
     pub use crate::parsing::{
         JsonParser, MarkdownParser, MarkdownSection, OutputParser, ParseError, ParseResult,
         ReActParser, ReActStep, ReActStepType,
+    };
+
+    pub use crate::context::{
+        ContextConfig, ContextManager, ContextState, ContextTurnResult, GroundedContext,
+        QualityScorer, QualityScorerConfig, RollbackResult, SummarizationResult,
     };
 
     pub use crate::conversation::{
